@@ -1,0 +1,67 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: mongo-auth
+    restart: always
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: authdb
+    volumes:
+      - mongo_data:/data/db
+      - ./docker/mongo/init:/docker-entrypoint-initdb.d
+    networks:
+      - backend-network
+
+  postgres:
+    image: postgres:16
+    container_name: postgres-loans
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: loansdb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - backend-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: node-backend
+    ports:
+      - "3001:3000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - mongo
+      - postgres
+    networks:
+      - backend-network
+
+  frontend:
+    build:
+      context: ./frontend    
+      dockerfile: Dockerfile
+    container_name: nextjs-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001/api
+    networks:
+      - backend-network
+      
+volumes:
+  mongo_data:
+  postgres_data:
+
+networks:
+  backend-network:
+    driver: bridge

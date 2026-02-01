@@ -1,0 +1,17 @@
+# Dependencias
+node_modules/
+
+# Environment (VITAL: No subir contraseñas)
+.env
+
+# Build/Dist
+dist/
+build/
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage (si usas tests)
+coverage/
