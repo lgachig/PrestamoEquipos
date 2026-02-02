@@ -71,10 +71,15 @@ class EquipmentDAO {
 
   async getAllInventory() {
     const query = `
-      SELECT e.id, e.name, t.name as type, e.total_quantity, e.available_quantity
+      SELECT 
+        e.id, 
+        e.name, 
+        t.name as type, 
+        e.total_quantity, 
+        e.available_quantity
       FROM equipments e
       JOIN equipment_types t ON e.type_id = t.id
-      WHERE (e.active IS NULL OR e.active = true)
+      WHERE e.available_quantity > 0
     `;
     const result = await pool.query(query);
     return result.rows.map(row => ({
