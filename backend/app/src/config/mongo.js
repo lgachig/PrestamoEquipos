@@ -1,3 +1,6 @@
+/**
+ * Conexión a MongoDB. Usa variable de entorno MONGO_URI (.env).
+ */
 const mongoose = require('mongoose');
 
 const connectMongo = async () => {

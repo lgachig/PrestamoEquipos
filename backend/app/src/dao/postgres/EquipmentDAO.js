@@ -15,6 +15,7 @@ class EquipmentDAO {
     }));
   }
 
+  /** Obtiene un equipo por ID. */
   async findById(id) {
     const result = await pool.query(
       'SELECT * FROM get_equipment_by_id($1)',
@@ -33,6 +34,7 @@ class EquipmentDAO {
     });
   }
 
+  /** Crea o incrementa stock de un equipo (Create del CRUD). */
   async addEquipment(name, typeName, quantity) {
     try {
       // Primero aseguramos que el tipo existe y obtenemos su ID
@@ -61,8 +63,9 @@ class EquipmentDAO {
     }
   }
 
+  /** Delete lógico: marca el equipo como inactivo en lugar de borrarlo. */
   async deleteEquipment(id) {
-    const query = 'DELETE FROM equipments WHERE id = $1';
+    const query = 'UPDATE equipments SET active = false WHERE id = $1';
     return await pool.query(query, [id]);
   }
 
@@ -71,15 +74,49 @@ class EquipmentDAO {
       SELECT e.id, e.name, t.name as type, e.total_quantity, e.available_quantity
       FROM equipments e
       JOIN equipment_types t ON e.type_id = t.id
+      WHERE (e.active IS NULL OR e.active = true)
     `;
     const result = await pool.query(query);
     return result.rows.map(row => ({
       id: row.id,
       name: row.name,
-      type: row.type, // Aquí devolvemos el nombre del tipo como "type" para el frontend
+      type: row.type,
       totalQuantity: row.total_quantity,
       availableQuantity: row.available_quantity
     }));
+  }
+
+  /**
+   * Actualiza un equipo por ID (nombre, tipo, cantidad total).
+   * @param {number} id
+   * @param {Object} data - { name?, type?, totalQuantity? }
+   */
+  async updateEquipment(id, data) {
+    const { name, type: typeName, totalQuantity } = data;
+    const updates = [];
+    const values = [];
+    let pos = 1;
+    if (name !== undefined) {
+      updates.push(`name = $${pos++}`);
+      values.push(name);
+    }
+    if (typeName !== undefined) {
+      const typeRes = await pool.query(
+        `INSERT INTO equipment_types (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+        [typeName]
+      );
+      updates.push(`type_id = $${pos++}`);
+      values.push(typeRes.rows[0].id);
+    }
+    if (totalQuantity !== undefined) {
+      updates.push(`total_quantity = $${pos++}`);
+      values.push(totalQuantity);
+    }
+    if (updates.length === 0) return { rowCount: 0 };
+    values.push(id);
+    const query = `UPDATE equipments SET ${updates.join(', ')} WHERE id = $${pos}`;
+    const result = await pool.query(query, values);
+    return result;
   }
 }
 

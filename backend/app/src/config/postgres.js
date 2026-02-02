@@ -1,3 +1,6 @@
+/**
+ * Conexión a PostgreSQL. Usa variables de entorno (.env).
+ */
 const { Pool } = require('pg');
 
 const pool = new Pool({

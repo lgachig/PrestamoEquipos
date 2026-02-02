@@ -1,27 +1,28 @@
 const express = require('express');
 const LoanService = require('../services/LoanService');
+const { cacheEquiposDisponibles, resolveEquiposDisponibles } = require('../middleware/cacheEquiposDisponibles');
 
 const router = express.Router();
 const loanService = new LoanService();
 
-// Prestar equipo
+/** POST /api/loans - Prestar equipo (usa realizarPrestamo con idEquipo, idUsuario). */
 router.post('/', async (req, res) => {
   try {
-    const { email, equipment, quantity } = req.body; 
-    await loanService.loanEquipment(email, equipment, quantity);
+    const { email, equipment, quantity = 1 } = req.body;
+    await loanService.realizarPrestamo(equipment, email, quantity);
     res.json({ message: 'Préstamo realizado correctamente' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-
+/** PUT /api/loans/return/:loanId - Devolver equipo (lógica polimórfica computadora/periférico). */
 router.put('/return/:loanId', async (req, res) => {
   try {
     const loanId = parseInt(req.params.loanId);
-    const { email } = req.body; 
-    await loanService.returnEquipment(loanId, email);
-    res.json({ message: 'Equipo devuelto correctamente' });
+    const { email } = req.body;
+    const result = await loanService.returnEquipment(loanId, email);
+    res.json(result);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -45,16 +46,39 @@ router.get('/active', async (req, res) => {
   }
 });
 
-router.get('/available', async (req, res) => {
+/** GET /api/loans/available - Equipos disponibles (caché Redis en saturación). */
+router.get('/available', cacheEquiposDisponibles, async (req, res) => {
   try {
-    const inventory = await loanService.getAllInventory();
-    res.json(inventory);
+    await resolveEquiposDisponibles(req, res, () => loanService.getAllInventory());
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 2. Rutas dinámicas al final (Las que tienen :parámetro)
+/** GET /api/loans/equipment/:id - Read de un equipo por ID (CRUD). */
+router.get('/equipment/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const equipment = await loanService.getEquipmentById(id);
+    if (!equipment) return res.status(404).json({ error: 'Equipo no encontrado' });
+    res.json(equipment);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/** PUT /api/loans/equipment/:id - Update de un equipo (CRUD). */
+router.put('/equipment/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await loanService.updateEquipment(id, req.body);
+    res.json({ message: 'Equipo actualizado correctamente' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Rutas dinámicas al final (Las que tienen :parámetro)
 router.get('/:email', async (req, res) => {
   try {
     const { email } = req.params;

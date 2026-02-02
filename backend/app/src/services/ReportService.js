@@ -3,6 +3,7 @@ const PostgresFactory = require('../factories/PostgresFactory');
 const UserDTO = require('../dto/UserDTO');
 const LoanDTO = require('../dto/LoanDTO');
 
+/** Servicio de reportes (usuario + historial de préstamos). */
 class ReportService {
   constructor() {
     const mongoFactory = new MongoFactory();
@@ -12,6 +13,7 @@ class ReportService {
     this.loanDAO = postgresFactory.createLoanDAO();
   }
 
+  /** Reporte completo de un usuario (datos + préstamos). */
   async getUserFullReport(email) {
     const user = await this.userDAO.findByEmail(email);
 
