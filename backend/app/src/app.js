@@ -24,5 +24,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api', reporteSistema);
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 module.exports = app;

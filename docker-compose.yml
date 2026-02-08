@@ -1,7 +1,4 @@
 services:
-  # =========================
-  # Bases de datos
-  # =========================
   mongo:
     image: mongo:7
     restart: always
@@ -32,45 +29,30 @@ services:
     networks:
       - backend-network
 
-  # =========================
-  # Backends (3 instancias)
-  # =========================
-  backend1:
+  backend:
     build: ./backend
-    container_name: backend-1
+    image: proyecto_arqui-backend
+    env_file:
+      - ./backend/.env
     environment:
       PORT: 3000
-      PG_HOST: postgres
-      MONGO_URI: mongodb://mongo:27017/authdb
-      REDIS_HOST: redis
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      mongo:
+        condition: service_started
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
     networks:
       - backend-network
 
-  backend2:
-    build: ./backend
-    container_name: backend-2
-    environment:
-      PORT: 3000
-      PG_HOST: postgres
-      MONGO_URI: mongodb://mongo:27017/authdb
-      REDIS_HOST: redis
-    networks:
-      - backend-network
-
-  backend3:
-    build: ./backend
-    container_name: backend-3
-    environment:
-      PORT: 3000
-      PG_HOST: postgres
-      MONGO_URI: mongodb://mongo:27017/authdb
-      REDIS_HOST: redis
-    networks:
-      - backend-network
-
-  # =========================
-  # NGINX Load Balancer
-  # =========================
   nginx:
     image: nginx:alpine
     ports:
@@ -78,17 +60,15 @@ services:
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - backend1
-      - backend2
-      - backend3
+      backend:
+        condition: service_healthy
     networks:
       - backend-network
 
-  # =========================
-  # Frontend
-  # =========================
   frontend:
-    build: ./frontend
+    image: proyecto_arqui-frontend
+    build:
+      context: ./frontend
     ports:
       - "3000:3000"
     environment:
