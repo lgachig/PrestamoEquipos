@@ -11,9 +11,10 @@ class LoanService {
     const factory = new PostgresFactory();
     this.loanDAO = factory.createLoanDAO();
     this.equipmentDAO = factory.createEquipmentDAO();
+    this.THRESHOLD = 50; 
   }
 
-  /**
+    /**
    * Realiza un préstamo. Sobrecarga:
    * - realizarPrestamo(idEquipo, idUsuario, quantity?) con quantity por defecto 1
    * - realizarPrestamo(objetoEquipo, objetoUsuario, quantity?) con quantity por defecto 1
@@ -36,18 +37,56 @@ class LoanService {
       email = objUsuario.email || objUsuario.id;
       if (quantity === 1 && typeof objEquipo.quantity === 'number') qty = objEquipo.quantity;
     } else {
-      throw new Error('realizarPrestamo requiere (idEquipo, idUsuario, quantity?) o (objetoEquipo, objetoUsuario, quantity?)');
+      throw new Error('Formato de préstamo no válido');
     }
 
     return this.loanEquipment(email, equipmentId, qty);
   }
 
   async loanEquipment(email, equipmentId, quantity) {
+    const QUEUE_KEY = 'cola_prestamos_pendientes';
+    const COUNT_KEY = 'available_request_count';
+    const instanceId = os.hostname(); // Evidencia de qué instancia del clúster responde
+
+    // 1. Verificar saturación causada por el tráfico del frontend
+    const count = await redisClient.get(COUNT_KEY);
+    const isSaturated = parseInt(count || '0', 10) > this.THRESHOLD;
+
+    if (isSaturated) {
+      // --- LÓGICA DE SATURACIÓN: PERSISTENCIA DIFERIDA EN REDIS ---
+      const loanRequest = JSON.stringify({ 
+        email, 
+        equipmentId, 
+        quantity, 
+        timestamp: new Date(),
+        node: instanceId 
+      });
+      
+      await redisClient.lPush(QUEUE_KEY, loanRequest);
+      
+      console.log(`⚠️ INSTANCIA ${instanceId} SATURADA: Préstamo de ${email} encolado.`);
+      return { 
+        status: 'QUEUED', 
+        message: 'Sistema saturado. Su solicitud será procesada automáticamente al bajar la carga.',
+        instancia: instanceId,
+        fuente: 'Caché Redis (Saturación)' 
+      };
+    }
+
+    // 2. Proceso normal en Postgres (Sin saturación)
     const hasLoan = await this.loanDAO.hasActiveLoan(email);
     if (hasLoan) {
       throw new Error('El usuario ya tiene un préstamo activo');
     }
+    
     await this.loanDAO.loanEquipment(email, equipmentId, quantity);
+    
+    return { 
+      status: 'SUCCESS', 
+      message: 'Préstamo realizado correctamente',
+      instancia: instanceId,
+      fuente: 'Base de Datos (Normal)'
+    };
   }
 
   /**

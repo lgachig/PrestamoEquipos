@@ -2,81 +2,69 @@ services:
   mongo:
     image: mongo:7
     restart: always
-    ports:
-      - "27018:27017"
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - backend-network
+    ports: ["27018:27017"]
+    volumes: ["mongo_data:/data/db"]
+    networks: [backend-network]
 
   postgres:
     image: postgres:16
     restart: always
-    ports:
-      - "5433:5432"
+    ports: ["5433:5432"]
     environment:
       POSTGRES_DB: loansdb
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - backend-network
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    networks: [backend-network]
 
   redis:
     image: redis:7-alpine
     restart: always
-    networks:
-      - backend-network
+    networks: [backend-network]
 
   backend:
     build: ./backend
     image: proyecto_arqui-backend
-    env_file:
-      - ./backend/.env
+    deploy:
+      replicas: 3
+    env_file: [./backend/.env]
     environment:
       PORT: 3000
-    expose:
-      - "3000"
+    expose: ["3000"]
     healthcheck:
+      # Usamos curl o wget pero con más margen de tiempo
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
-      interval: 10s
+      interval: 5s     # Revisa cada 5s
       timeout: 5s
-      retries: 5
+      retries: 15    # Aumentamos a 15 reintentos (75 segundos de margen para las DBs)
+      start_period: 15s # No empezar a chequear hasta los 15s
     depends_on:
-      mongo:
-        condition: service_started
-      postgres:
-        condition: service_started
-      redis:
-        condition: service_started
-    networks:
-      - backend-network
+      mongo: { condition: service_started }
+      postgres: { condition: service_started }
+      redis: { condition: service_started }
+    networks: [backend-network]
+
+  frontend:
+    build: ./frontend
+    image: proyecto_arqui-frontend
+    deploy:
+      replicas: 2 
+    environment:
+      # IMPORTANTE: El frontend en el navegador usará localhost para llegar a la API vía Nginx
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+    expose: ["3000"]
+    # Quitamos el depends_on de nginx para evitar bloqueos de inicio, 
+    # el frontend puede esperar a que Nginx suba.
+    networks: [backend-network]
 
   nginx:
     image: nginx:alpine
-    ports:
-      - "3001:80"
+    ports: ["3001:80"] 
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - backend-network
-
-  frontend:
-    image: proyecto_arqui-frontend
-    build:
-      context: ./frontend
-    ports:
-      - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://nginx/api
-    depends_on:
-      - nginx
-    networks:
-      - backend-network
+      backend: { condition: service_healthy }
+    networks: [backend-network]
 
 volumes:
   mongo_data:

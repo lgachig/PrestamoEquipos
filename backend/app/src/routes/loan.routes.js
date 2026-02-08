@@ -9,8 +9,9 @@ const loanService = new LoanService();
 router.post('/', async (req, res) => {
   try {
     const { email, equipment, quantity = 1 } = req.body;
-    await loanService.realizarPrestamo(equipment, email, quantity);
-    res.json({ message: 'Préstamo realizado correctamente' });
+    const result = await loanService.realizarPrestamo(equipment, email, quantity);
+    // Ahora result contiene { status, message }
+    res.json(result);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -112,6 +113,8 @@ router.delete('/equipment/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
 
 
 module.exports = router;
