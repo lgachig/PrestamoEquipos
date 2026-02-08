@@ -1,25 +1,19 @@
-# Clúster: 3 instancias del backend + Nginx como balanceador de carga.
-# Uso: docker-compose -f docker-compose.cluster.yml up --build
-# Logs con instancia que respondió: docker-compose -f docker-compose.cluster.yml logs -f nginx
-
 services:
+  # =========================
+  # Bases de datos
+  # =========================
   mongo:
     image: mongo:7
-    container_name: mongo-auth
     restart: always
     ports:
       - "27018:27017"
-    environment:
-      MONGO_INITDB_DATABASE: authdb
     volumes:
       - mongo_data:/data/db
-      - ./docker/mongo/init:/docker-entrypoint-initdb.d
     networks:
       - backend-network
 
   postgres:
     image: postgres:16
-    container_name: postgres-loans
     restart: always
     ports:
       - "5433:5432"
@@ -29,83 +23,56 @@ services:
       POSTGRES_PASSWORD: admin123
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d
     networks:
       - backend-network
 
   redis:
     image: redis:7-alpine
-    container_name: redis-cache
     restart: always
-    ports:
-      - "6379:6379"
     networks:
       - backend-network
 
+  # =========================
+  # Backends (3 instancias)
+  # =========================
   backend1:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: node-backend-1
-    env_file:
-      - ./backend/.env
+    build: ./backend
+    container_name: backend-1
     environment:
-      - PORT=3000
-      - PG_HOST=postgres
-      - PG_PORT=5432
-      - MONGO_URI=mongodb://mongo:27017/authdb
-      - REDIS_HOST=redis
-    depends_on:
-      - mongo
-      - postgres
-      - redis
+      PORT: 3000
+      PG_HOST: postgres
+      MONGO_URI: mongodb://mongo:27017/authdb
+      REDIS_HOST: redis
     networks:
       - backend-network
 
   backend2:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: node-backend-2
-    env_file:
-      - ./backend/.env
+    build: ./backend
+    container_name: backend-2
     environment:
-      - PORT=3000
-      - PG_HOST=postgres
-      - PG_PORT=5432
-      - MONGO_URI=mongodb://mongo:27017/authdb
-      - REDIS_HOST=redis
-    depends_on:
-      - mongo
-      - postgres
-      - redis
+      PORT: 3000
+      PG_HOST: postgres
+      MONGO_URI: mongodb://mongo:27017/authdb
+      REDIS_HOST: redis
     networks:
       - backend-network
 
   backend3:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: node-backend-3
-    env_file:
-      - ./backend/.env
+    build: ./backend
+    container_name: backend-3
     environment:
-      - PORT=3000
-      - PG_HOST=postgres
-      - PG_PORT=5432
-      - MONGO_URI=mongodb://mongo:27017/authdb
-      - REDIS_HOST=redis
-    depends_on:
-      - mongo
-      - postgres
-      - redis
+      PORT: 3000
+      PG_HOST: postgres
+      MONGO_URI: mongodb://mongo:27017/authdb
+      REDIS_HOST: redis
     networks:
       - backend-network
 
+  # =========================
+  # NGINX Load Balancer
+  # =========================
   nginx:
     image: nginx:alpine
-    container_name: nginx-lb
-    restart: always
     ports:
       - "3001:80"
     volumes:
@@ -117,17 +84,17 @@ services:
     networks:
       - backend-network
 
+  # =========================
+  # Frontend
+  # =========================
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: nextjs-frontend
+    build: ./frontend
     ports:
       - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://nginx/api
     depends_on:
       - nginx
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:3001/api
     networks:
       - backend-network
 

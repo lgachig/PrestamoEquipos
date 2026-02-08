@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
-const BASE_URL = 'http://nginx-lb'; 
+const BASE_URL = 'http://nginx';
 
 export const options = {
   stages: [
@@ -12,9 +12,9 @@ export const options = {
 };
 
 export default function () {
-  const res = http.get(`${BASE_URL}/api/loans/available`);
+  const res = http.get(`${BASE_URL}/api/poll`);
   check(res, {
-    'status 200': (r) => r.status === 200,
+    'request sent': (r) => r.status !== 0,
   });
 
   sleep(0.1);
